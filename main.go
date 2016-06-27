@@ -1,41 +1,38 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/kelseyhightower/mysql-healthz/healthz"
 )
 
-var (
-	dataSourceName string
-	databaseName   string
-	healthAddr     string
-	tables         string
-)
-
 func main() {
-	flag.StringVar(&healthAddr, "health-addr", "0.0.0.0:10000", "Healthz HTTP listen address.")
-	flag.StringVar(&dataSourceName, "data-source-name", "", "The mysql connect string.")
-	flag.StringVar(&databaseName, "database-name", "healthz", "Name of the database to monitor.")
-	flag.StringVar(&tables, "tables", "", "Comma seperated list of tables that must exist.")
-	flag.Parse()
+	log.Println("Starting mysql-healthz...")
+
+	httpAddr := os.Getenv("HTTP_ADDR")
+
+	databaseUsername := os.Getenv("DATABASE_USERNAME")
+	databasePassword := os.Getenv("DATABASE_PASSWORD")
+	databaseHost := os.Getenv("DATABASE_HOST")
+	databaseName := os.Getenv("DATABASE_NAME")
 
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	log.Println("Initializing database connection pool...")
+	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s)/%s",
+		databaseUsername, databasePassword, databaseHost, databaseName)
+
 	hc := &healthz.Config{
 		Hostname: hostname,
 		Database: healthz.DatabaseConfig{
 			DriverName:     "mysql",
 			DataSourceName: dataSourceName,
-			DatabaseName:   databaseName,
-			Tables:         strings.Split(tables, ","),
 		},
 	}
 
@@ -44,6 +41,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Printf("HTTP service listening on %s", httpAddr)
 	http.Handle("/healthz", healthzHandler)
-	http.ListenAndServe(healthAddr, nil)
+	http.ListenAndServe(httpAddr, nil)
 }

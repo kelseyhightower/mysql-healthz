@@ -16,16 +16,12 @@ type Config struct {
 type DatabaseConfig struct {
 	DriverName     string
 	DataSourceName string
-	DatabaseName   string
-	Tables         []string
 }
 
 type handler struct {
-	dc           *DBChecker
-	databaseName string
-	hostname     string
-	metadata     map[string]string
-	tables       []string
+	dc       *DBChecker
+	hostname string
+	metadata map[string]string
 }
 
 func Handler(hc *Config) (http.Handler, error) {
@@ -43,7 +39,7 @@ func Handler(hc *Config) (http.Handler, error) {
 	metadata["database_url"] = config.Addr
 	metadata["database_user"] = config.User
 
-	h := &handler{dc, hc.Database.DatabaseName, hc.Hostname, metadata, hc.Database.Tables}
+	h := &handler{dc, hc.Hostname, metadata}
 	return h, nil
 }
 
@@ -70,28 +66,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	errors := make([]Error, 0)
 
-	err := h.dc.Reachable()
+	err := h.dc.Ping()
 	if err != nil {
 		errors = append(errors, Error{
 			Type:        "DatabasePing",
 			Description: "Database liveliness check.",
 			Error:       err.Error(),
 		})
-	}
-
-	for _, table := range h.tables {
-		err = h.dc.TableExist(h.databaseName, table)
-		if err != nil {
-			metadata := make(map[string]string)
-			metadata["table_name"] = table
-
-			errors = append(errors, Error{
-				Type:        "DatabaseTableExist",
-				Description: "Database table exist check.",
-				Error:       err.Error(),
-				Metadata:    metadata,
-			})
-		}
 	}
 
 	response.Errors = errors
@@ -102,7 +83,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	data, err := json.MarshalIndent(&response, "", "  ")
 	if err != nil {
